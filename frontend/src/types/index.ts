@@ -1,9 +1,17 @@
 // User types
+export interface CoachSettings {
+  coach_type: 'specialist' | 'generalist' | 'recreational';
+  training_plan: 'polarized' | 'traditional' | 'threshold';
+  time_constraint: 'minimal' | 'moderate' | 'committed' | 'serious' | 'elite';
+  weekly_hours_available?: number;
+}
+
 export interface User {
   id: string;
   email: string;
   name: string;
   primary_sport: string;
+  coach_settings?: CoachSettings;
 }
 
 export interface ThresholdValues {
@@ -147,4 +155,80 @@ export interface PlannedWorkout {
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+// AI Coach types
+export interface AthleteContext {
+  name: string;
+  primary_sport: string;
+  fitness_ctl: number;
+  fatigue_atl: number;
+  form_tsb: number;
+  form_status: string;
+  form_description: string;
+}
+
+export interface RecentActivitySummary {
+  date: string;
+  sport: string;
+  name?: string;
+  duration_minutes: number;
+  tss?: number;
+  avg_hr_bpm?: number;
+  np_watts?: number;
+}
+
+export interface UpcomingWorkoutSummary {
+  id: string;
+  date: string;
+  name: string;
+  sport: string;
+  duration_minutes?: number;
+  estimated_tss?: number;
+  description?: string;
+}
+
+export interface CoachingContext {
+  athlete: AthleteContext;
+  recent_activities: RecentActivitySummary[];
+  upcoming_workouts: UpcomingWorkoutSummary[];
+}
+
+export interface ModificationPreview {
+  type: string;
+  action?: string;
+  workout_id?: string;
+  date: string;
+  original_name?: string;
+  new_name?: string;
+  sport?: string;
+  duration_minutes?: number;
+  estimated_tss?: number;
+  details?: Record<string, { from?: string | number; to: string | number }>;
+  notes?: string;
+}
+
+export interface LoadAdjustment {
+  current_weekly_tss?: number;
+  recommended_weekly_tss?: number;
+  reason?: string;
+}
+
+export interface PlanModificationResponse {
+  success: boolean;
+  summary?: string;
+  athlete_message?: string;
+  modifications: ModificationPreview[];
+  load_adjustment?: LoadAdjustment;
+  raw_response: Record<string, unknown>;
+  errors: string[];
+}
+
+export interface ApplyModificationsResponse {
+  success: boolean;
+  modified_workouts: string[];
+  created_workouts: string[];
+  skipped_workouts: string[];
+  errors: string[];
+  warnings: string[];
 }

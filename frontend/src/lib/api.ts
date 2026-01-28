@@ -10,6 +10,10 @@ import type {
   ZoneMethodInfo,
   PlannedWorkout,
   RecordPoint,
+  CoachingContext,
+  PlanModificationResponse,
+  ApplyModificationsResponse,
+  CoachSettings,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -212,6 +216,76 @@ export async function chatStream(
       }
     }
   }
+}
+
+// AI Coach - Plan Modification
+export async function getCoachingContext(): Promise<CoachingContext> {
+  const { data } = await api.get('/ai/context');
+  return data;
+}
+
+export async function analyzePlan(
+  feedback: string,
+  daysForward: number = 14,
+  previousSuggestions?: Record<string, unknown>[]
+): Promise<PlanModificationResponse> {
+  const { data } = await api.post('/ai/plan/analyze', {
+    feedback,
+    days_forward: daysForward,
+    previous_suggestions: previousSuggestions,
+  });
+  return data;
+}
+
+export async function generateWeeklyPlan(
+  goals: string,
+  constraints?: string,
+  startDate?: string
+): Promise<PlanModificationResponse> {
+  const { data } = await api.post('/ai/plan/generate', {
+    goals,
+    constraints,
+    start_date: startDate,
+  });
+  return data;
+}
+
+export async function applyPlanModifications(
+  responseJson: Record<string, unknown>,
+  dryRun: boolean = false
+): Promise<ApplyModificationsResponse> {
+  const { data } = await api.post('/ai/plan/apply', {
+    response_json: responseJson,
+    dry_run: dryRun,
+  });
+  return data;
+}
+
+export async function refinePlanSuggestions(
+  originalResponse: Record<string, unknown>,
+  refinementFeedback: string
+): Promise<PlanModificationResponse> {
+  const { data } = await api.post('/ai/plan/refine', {
+    original_response: originalResponse,
+    refinement_feedback: refinementFeedback,
+  });
+  return data;
+}
+
+export function getWorkoutFitUrl(workoutId: string): string {
+  const token = localStorage.getItem('token');
+  return `${API_BASE_URL}/api/v1/ai/workout/${workoutId}/fit?token=${token}`;
+}
+
+// AI Coach - Settings
+export async function getCoachSettings(): Promise<CoachSettings> {
+  const { data } = await api.get('/ai/settings');
+  return data;
+}
+
+export async function updateCoachSettings(settings: Partial<CoachSettings>): Promise<CoachSettings> {
+  const { data } = await api.put('/ai/settings', settings);
+  return data;
 }
 
 // Integrations
