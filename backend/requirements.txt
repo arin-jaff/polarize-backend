@@ -17,7 +17,7 @@ python-dotenv==1.0.1
 httpx==0.28.1
 
 # FIT File Parsing
-fitparse==0.0.7
+fitparse==1.0.0
 fitdecode==0.10.0
 
 # Data Processing
