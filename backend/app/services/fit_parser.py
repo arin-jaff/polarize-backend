@@ -8,6 +8,38 @@ import fitdecode
 
 from app.models.activity import Activity, RecordPoint, LapSummary
 
+
+def _normalize_power_outliers(records: list[RecordPoint], threshold: int = 1000) -> list[RecordPoint]:
+    """
+    Detect and smooth power data outliers.
+    
+    If a power value differs by more than `threshold` watts from the previous value,
+    replace it with the previous value (or scale it down if previous is None).
+    """
+    if not records or len(records) < 2:
+        return records
+    
+    normalized = []
+    for i, record in enumerate(records):
+        if i == 0:
+            # First record, keep as-is
+            normalized.append(record)
+        else:
+            prev_power = normalized[i - 1].power
+            curr_power = record.power
+            
+            # If either is None, skip the check
+            if prev_power is None or curr_power is None:
+                normalized.append(record)
+            elif abs(curr_power - prev_power) > threshold:
+                # Outlier detected: replace with previous power value
+                record.power = prev_power
+                normalized.append(record)
+            else:
+                # Normal value
+                normalized.append(record)
+    
+    return normalized
 # Map FIT sport enum values to our sport names
 SPORT_MAP = {
     "running": "running",
@@ -66,6 +98,9 @@ async def parse_fit_file(
                 if lap:
                     laps.append(lap)
 
+    # Normalize power outliers in records
+    records = _normalize_power_outliers(records)
+
     # Determine start/end times from records if session doesn't have them
     start_time = session_data.get("start_time")
     if not start_time and records:
@@ -82,6 +117,10 @@ async def parse_fit_file(
     sport = SPORT_MAP.get(str(raw_sport).lower(), "other")
     raw_sub_sport = session_data.get("sub_sport", "")
     sub_sport = SUB_SPORT_MAP.get(str(raw_sub_sport).lower())
+    
+    # Override sport based on sub_sport if it's more specific
+    if sub_sport == "indoor_rowing":
+        sport = "rowing"
 
     return Activity(
         user_id=user_id,
@@ -136,49 +175,69 @@ def _extract_session(frame: fitdecode.FitDataMessage) -> dict:
         "total_descent": "total_descent",
     }
     for fit_name, our_name in field_map.items():
-        val = frame.get_value(fit_name)
-        if val is not None and our_name not in data:
-            data[our_name] = val
+        try:
+            val = frame.get_value(fit_name)
+            if val is not None and our_name not in data:
+                data[our_name] = val
+        except KeyError:
+            # Field doesn't exist in this FIT file, skip it
+            pass
     return data
 
 
 def _extract_record(frame: fitdecode.FitDataMessage) -> RecordPoint | None:
     """Extract a single time-series record point."""
-    timestamp = frame.get_value("timestamp")
+    try:
+        timestamp = frame.get_value("timestamp")
+    except KeyError:
+        return None
+        
     if not timestamp:
         return None
 
+    def safe_get(field: str):
+        try:
+            return frame.get_value(field)
+        except KeyError:
+            return None
+
     return RecordPoint(
         timestamp=timestamp,
-        heart_rate=frame.get_value("heart_rate"),
-        power=frame.get_value("power"),
-        cadence=frame.get_value("cadence"),
-        speed=frame.get_value("enhanced_speed") or frame.get_value("speed"),
-        distance=frame.get_value("distance"),
-        altitude=frame.get_value("enhanced_altitude") or frame.get_value("altitude"),
-        latitude=_semicircles_to_degrees(frame.get_value("position_lat")),
-        longitude=_semicircles_to_degrees(frame.get_value("position_long")),
-        temperature=frame.get_value("temperature"),
+        heart_rate=safe_get("heart_rate"),
+        power=safe_get("power"),
+        cadence=safe_get("cadence"),
+        speed=safe_get("enhanced_speed") or safe_get("speed"),
+        distance=safe_get("distance"),
+        altitude=safe_get("enhanced_altitude") or safe_get("altitude"),
+        latitude=_semicircles_to_degrees(safe_get("position_lat")),
+        longitude=_semicircles_to_degrees(safe_get("position_long")),
+        temperature=safe_get("temperature"),
     )
 
 
 def _extract_lap(frame: fitdecode.FitDataMessage) -> LapSummary | None:
     """Extract lap summary data."""
-    start_time = frame.get_value("start_time")
-    timer_time = frame.get_value("total_timer_time")
+    def safe_get(field: str):
+        try:
+            return frame.get_value(field)
+        except KeyError:
+            return None
+
+    start_time = safe_get("start_time")
+    timer_time = safe_get("total_timer_time")
     if not start_time or not timer_time:
         return None
 
     return LapSummary(
         start_time=start_time,
         total_timer_time=timer_time,
-        total_distance=frame.get_value("total_distance"),
-        avg_heart_rate=frame.get_value("avg_heart_rate"),
-        max_heart_rate=frame.get_value("max_heart_rate"),
-        avg_power=frame.get_value("avg_power"),
-        max_power=frame.get_value("max_power"),
-        avg_cadence=frame.get_value("avg_cadence"),
-        avg_speed=frame.get_value("enhanced_avg_speed") or frame.get_value("avg_speed"),
+        total_distance=safe_get("total_distance"),
+        avg_heart_rate=safe_get("avg_heart_rate"),
+        max_heart_rate=safe_get("max_heart_rate"),
+        avg_power=safe_get("avg_power"),
+        max_power=safe_get("max_power"),
+        avg_cadence=safe_get("avg_cadence"),
+        avg_speed=safe_get("enhanced_avg_speed") or safe_get("avg_speed"),
     )
 
 

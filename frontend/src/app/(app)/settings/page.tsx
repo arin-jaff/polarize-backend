@@ -213,107 +213,265 @@ function ThresholdsTab() {
       >
         {mutation.isPending ? 'Saving...' : 'Save Thresholds'}
       </button>
+
+      {/* Your Zones Summary */}
+      {(thresholds.threshold_hr || thresholds.max_hr || thresholds.threshold_power) && (
+        <div className="border-t border-slate-200 pt-8 mt-8">
+          <h3 className="text-lg font-semibold mb-6">Your Zones Preview</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* HR Zones Summary */}
+            {thresholds.threshold_hr || thresholds.max_hr ? (
+              <div>
+                <h4 className="font-medium text-slate-700 mb-4">Heart Rate (bpm)</h4>
+                <div className="space-y-2 text-sm">
+                  {thresholds.threshold_hr && (
+                    <>
+                      <div className="flex justify-between">
+                        <span>Zone 1 - Recovery:</span>
+                        <span className="font-medium">0 - {Math.round(parseInt(thresholds.threshold_hr) * 0.5)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Zone 2 - Endurance:</span>
+                        <span className="font-medium">{Math.round(parseInt(thresholds.threshold_hr) * 0.5) + 1} - {Math.round(parseInt(thresholds.threshold_hr) * 0.75)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Zone 3 - Tempo:</span>
+                        <span className="font-medium">{Math.round(parseInt(thresholds.threshold_hr) * 0.75) + 1} - {parseInt(thresholds.threshold_hr)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Zone 4 - Threshold:</span>
+                        <span className="font-medium">{parseInt(thresholds.threshold_hr) + 1} - {Math.round(parseInt(thresholds.threshold_hr) * 1.1)}</span>
+                      </div>
+                    </>
+                  )}
+                  {thresholds.max_hr && thresholds.threshold_hr && (
+                    <div className="flex justify-between">
+                      <span>Zone 5 - Max:</span>
+                      <span className="font-medium">{Math.round(parseInt(thresholds.threshold_hr) * 1.1) + 1} - {parseInt(thresholds.max_hr)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+            
+            {/* Power Zones Summary */}
+            {thresholds.threshold_power ? (
+              <div>
+                <h4 className="font-medium text-slate-700 mb-4">Power (watts)</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Zone 1 - Active:</span>
+                    <span className="font-medium">0 - {Math.round(parseInt(thresholds.threshold_power) * 0.55)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 2 - Endurance:</span>
+                    <span className="font-medium">{Math.round(parseInt(thresholds.threshold_power) * 0.55) + 1} - {Math.round(parseInt(thresholds.threshold_power) * 0.75)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 3 - Sweet Spot:</span>
+                    <span className="font-medium">{Math.round(parseInt(thresholds.threshold_power) * 0.75) + 1} - {parseInt(thresholds.threshold_power)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 4 - VO2 Max:</span>
+                    <span className="font-medium">{parseInt(thresholds.threshold_power) + 1} - {Math.round(parseInt(thresholds.threshold_power) * 1.2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 5 - Anaerobic:</span>
+                    <span className="font-medium">{Math.round(parseInt(thresholds.threshold_power) * 1.2) + 1} - {Math.round(parseInt(thresholds.threshold_power) * 1.5)}</span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function ZonesTab() {
-  const { data: hrMethods } = useQuery({
-    queryKey: ['hrMethods'],
-    queryFn: getHrMethods,
-  });
-  const { data: powerMethods } = useQuery({
-    queryKey: ['powerMethods'],
-    queryFn: getPowerMethods,
-  });
-  const { data: hrZones } = useQuery({
+  const { data: hrZonesData } = useQuery({
     queryKey: ['hrZones'],
     queryFn: getHrZones,
   });
-  const { data: powerZones } = useQuery({
+
+  const { data: powerZonesData } = useQuery({
     queryKey: ['powerZones'],
     queryFn: getPowerZones,
   });
 
+  // Extract threshold values from the zone data or use defaults
+  const lthr = hrZonesData?.thresholds?.threshold_hr || 0;
+  const maxHr = hrZonesData?.thresholds?.max_hr || 0;
+  const ftp = powerZonesData?.thresholds?.threshold_power || 0;
+
+  const hrZone1Max = lthr > 0 ? Math.round(lthr * 0.5) : '-';
+  const hrZone2Max = lthr > 0 ? Math.round(lthr * 0.75) : '-';
+  const hrZone3Max = lthr > 0 ? lthr : '-';
+  const hrZone4Max = lthr > 0 ? Math.round(lthr * 1.1) : '-';
+  const hrZone5Max = maxHr > 0 ? maxHr : '-';
+
+  const hrZones = [
+    { zone: 1, name: 'Recovery', max: hrZone1Max },
+    { zone: 2, name: 'Endurance', max: hrZone2Max },
+    { zone: 3, name: 'Tempo', max: hrZone3Max },
+    { zone: 4, name: 'Threshold', max: hrZone4Max },
+    { zone: 5, name: 'Max', max: hrZone5Max },
+  ];
+
+  const powerZone1Max = ftp > 0 ? Math.round(ftp * 0.55) : '-';
+  const powerZone2Max = ftp > 0 ? Math.round(ftp * 0.75) : '-';
+  const powerZone3Max = ftp > 0 ? ftp : '-';
+  const powerZone4Max = ftp > 0 ? Math.round(ftp * 1.2) : '-';
+  const powerZone5Max = ftp > 0 ? Math.round(ftp * 1.5) : '-';
+
+  const powerZones = [
+    { zone: 1, name: 'Active', max: powerZone1Max },
+    { zone: 2, name: 'Endurance', max: powerZone2Max },
+    { zone: 3, name: 'Sweet Spot', max: powerZone3Max },
+    { zone: 4, name: 'VO2 Max', max: powerZone4Max },
+    { zone: 5, name: 'Anaerobic', max: powerZone5Max },
+  ];
+
   return (
     <div className="space-y-8">
+      {/* Heart Rate Zones */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">Heart Rate Zones</h3>
-        {hrMethods && (
-          <div className="mb-4">
-            <label className="block text-sm text-slate-600 mb-1">Calculation Method</label>
-            <select className="px-3 py-2 border border-slate-300 rounded-lg bg-white">
-              {hrMethods.map((m) => (
-                <option key={m.method_id} value={m.method_id}>
-                  {m.name} ({m.zone_count} zones)
-                </option>
-              ))}
-            </select>
+        <h3 className="text-lg font-semibold mb-6">Heart Rate Zones</h3>
+
+        {/* HR Zone Gradient with Dividers */}
+        <div className="space-y-3">
+          <div className="relative h-10 rounded-lg border border-slate-200 overflow-hidden"
+            style={{
+              background: 'linear-gradient(to right, #ffffff 0%, #fecaca 20%, #f87171 40%, #dc2626 60%, #b91c1c 80%, #7f1d1d 100%)',
+            }}
+          >
+            {/* Zone divider lines */}
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="absolute top-0 bottom-0 w-0.5 bg-slate-400 opacity-60"
+                style={{ left: `${(i / 5) * 100}%` }}
+              ></div>
+            ))}
           </div>
-        )}
-        {hrZones && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 pr-4">Zone</th>
-                  <th className="text-left py-2 pr-4">Name</th>
-                  <th className="text-left py-2">Range</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hrZones.zones.map((zone) => (
-                  <tr key={zone.zone_number} className="border-b">
-                    <td className="py-2 pr-4 font-medium">{zone.zone_number}</td>
-                    <td className="py-2 pr-4">{zone.name}</td>
-                    <td className="py-2">
-                      {zone.lower} - {zone.upper} bpm
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          
+          {/* Zone labels */}
+          <div className="flex justify-between text-xs font-medium text-slate-700">
+            {hrZones.map((zone) => (
+              <div key={zone.zone} className="flex-1 text-center">
+                <div>{zone.name}</div>
+                <div className="text-slate-500 text-xs">{typeof zone.max === 'number' ? Math.round(zone.max) : zone.max} bpm</div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
       </div>
 
+      {/* Power Zones */}
       <div>
-        <h3 className="text-lg font-semibold mb-4">Power Zones</h3>
-        {powerMethods && (
-          <div className="mb-4">
-            <label className="block text-sm text-slate-600 mb-1">Calculation Method</label>
-            <select className="px-3 py-2 border border-slate-300 rounded-lg bg-white">
-              {powerMethods.map((m) => (
-                <option key={m.method_id} value={m.method_id}>
-                  {m.name} ({m.zone_count} zones)
-                </option>
-              ))}
-            </select>
+        <h3 className="text-lg font-semibold mb-6">Power Zones</h3>
+
+        {/* Power Zone Gradient with Dividers */}
+        <div className="space-y-3">
+          <div className="relative h-10 rounded-lg border border-slate-200 overflow-hidden"
+            style={{
+              background: 'linear-gradient(to right, #ffffff 0%, #e9d5ff 20%, #d8b4fe 40%, #c084fc 60%, #a855f7 80%, #6d28d9 100%)',
+            }}
+          >
+            {/* Zone divider lines */}
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="absolute top-0 bottom-0 w-0.5 bg-slate-400 opacity-60"
+                style={{ left: `${(i / 5) * 100}%` }}
+              ></div>
+            ))}
           </div>
-        )}
-        {powerZones && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 pr-4">Zone</th>
-                  <th className="text-left py-2 pr-4">Name</th>
-                  <th className="text-left py-2">Range</th>
-                </tr>
-              </thead>
-              <tbody>
-                {powerZones.zones.map((zone) => (
-                  <tr key={zone.zone_number} className="border-b">
-                    <td className="py-2 pr-4 font-medium">{zone.zone_number}</td>
-                    <td className="py-2 pr-4">{zone.name}</td>
-                    <td className="py-2">
-                      {zone.lower} - {zone.upper} W
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          
+          {/* Zone labels */}
+          <div className="flex justify-between text-xs font-medium text-slate-700">
+            {powerZones.map((zone) => (
+              <div key={zone.zone} className="flex-1 text-center">
+                <div>{zone.name}</div>
+                <div className="text-slate-500 text-xs">{typeof zone.max === 'number' ? Math.round(zone.max) : zone.max} W</div>
+              </div>
+            ))}
           </div>
+        </div>
+      </div>
+
+      {/* Your Zones Summary */}
+      <div className="border-t border-slate-200 pt-8 mt-8">
+        <h3 className="text-lg font-semibold mb-6">Your Zones</h3>
+        
+        {lthr > 0 || maxHr > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* HR Zones Summary */}
+            {lthr > 0 || maxHr > 0 ? (
+              <div>
+                <h4 className="font-medium text-slate-700 mb-4">Heart Rate (bpm)</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Zone 1 - Recovery:</span>
+                    <span className="font-medium">0 - {Math.round(lthr * 0.5)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 2 - Endurance:</span>
+                    <span className="font-medium">{Math.round(lthr * 0.5) + 1} - {Math.round(lthr * 0.75)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 3 - Tempo:</span>
+                    <span className="font-medium">{Math.round(lthr * 0.75) + 1} - {lthr}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 4 - Threshold:</span>
+                    <span className="font-medium">{lthr + 1} - {Math.round(lthr * 1.1)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 5 - Max:</span>
+                    <span className="font-medium">{Math.round(lthr * 1.1) + 1} - {maxHr}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-slate-500 text-sm">Set Heart Rate thresholds to see zones</div>
+            )}
+            
+            {/* Power Zones Summary */}
+            {ftp > 0 ? (
+              <div>
+                <h4 className="font-medium text-slate-700 mb-4">Power (watts)</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Zone 1 - Active:</span>
+                    <span className="font-medium">0 - {Math.round(ftp * 0.55)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 2 - Endurance:</span>
+                    <span className="font-medium">{Math.round(ftp * 0.55) + 1} - {Math.round(ftp * 0.75)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 3 - Sweet Spot:</span>
+                    <span className="font-medium">{Math.round(ftp * 0.75) + 1} - {ftp}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 4 - VO2 Max:</span>
+                    <span className="font-medium">{ftp + 1} - {Math.round(ftp * 1.2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Zone 5 - Anaerobic:</span>
+                    <span className="font-medium">{Math.round(ftp * 1.2) + 1} - {Math.round(ftp * 1.5)}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-slate-500 text-sm">Set Power thresholds to see zones</div>
+            )}
+          </div>
+        ) : (
+          <p className="text-slate-500 text-sm">Configure thresholds on the Thresholds tab to see your zones.</p>
         )}
       </div>
     </div>

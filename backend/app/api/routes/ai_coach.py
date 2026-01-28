@@ -75,7 +75,7 @@ async def _call_ollama_with_system(
         },
     }
 
-    async with httpx.AsyncClient(timeout=180.0) as client:
+    async with httpx.AsyncClient(timeout=300.0) as client:
         try:
             resp = await client.post(
                 f"{settings.ollama_base_url}/api/chat",
@@ -87,6 +87,11 @@ async def _call_ollama_with_system(
             raise HTTPException(
                 status_code=503,
                 detail="AI coach is not available. Ensure Ollama is running.",
+            )
+        except httpx.TimeoutException:
+            raise HTTPException(
+                status_code=504,
+                detail="AI coach request timed out. The model is taking too long to respond.",
             )
         except httpx.HTTPError as e:
             raise HTTPException(status_code=502, detail=f"AI coach error: {str(e)}")
@@ -171,7 +176,17 @@ async def chat(request: ChatRequest, user: User = Depends(get_current_user)):
     """Send a message to the AI coach and get a response."""
     messages = _build_chat_messages(user, request)
     data = await _call_ollama_chat(messages, stream=False)
-    return ChatResponse(response=data["message"]["content"])
+    
+    # Handle different response structures
+    content = None
+    if "message" in data and "content" in data["message"]:
+        content = data["message"]["content"]
+    elif "response" in data:
+        content = data["response"]
+    else:
+        raise HTTPException(status_code=502, detail="Invalid response from AI coach")
+    
+    return ChatResponse(response=content)
 
 
 @router.post("/chat/stream")
@@ -194,11 +209,23 @@ async def chat_stream(request: ChatRequest, user: User = Depends(get_current_use
                 ) as resp:
                     async for line in resp.aiter_lines():
                         if line:
-                            data = json.loads(line)
-                            if not data.get("done", False):
-                                yield f"data: {json.dumps({'text': data['message']['content']})}\n\n"
-                            else:
-                                yield "data: [DONE]\n\n"
+                            try:
+                                data = json.loads(line)
+                                if not data.get("done", False):
+                                    # Handle different response structures
+                                    content = None
+                                    if "message" in data and "content" in data["message"]:
+                                        content = data["message"]["content"]
+                                    elif "response" in data:
+                                        content = data["response"]
+                                    
+                                    if content:
+                                        yield f"data: {json.dumps({'text': content})}\n\n"
+                                else:
+                                    yield "data: [DONE]\n\n"
+                            except (json.JSONDecodeError, KeyError):
+                                # Skip malformed lines
+                                pass
             except httpx.ConnectError:
                 yield f"data: {json.dumps({'error': 'AI coach is not available'})}\n\n"
 
