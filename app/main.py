@@ -24,7 +24,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://polarize-frontend.pages.dev",
+        "https://9984fa38.polarize-frontend.pages.dev",
+        "https://polarize.arinjaff.com",
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
