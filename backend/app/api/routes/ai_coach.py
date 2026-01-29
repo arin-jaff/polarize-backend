@@ -45,7 +45,7 @@ from app.services.workout_modifier import (
     apply_modifications,
     generate_modification_preview,
 )
-from app.services.fit_generator import generate_workout_file
+from app.services.fit_generator import generate_workout_file, generate_fit_from_ai_workout
 
 router = APIRouter()
 
@@ -56,7 +56,7 @@ router = APIRouter()
 async def _call_ollama_with_system(
     system_prompt: str,
     user_prompt: str,
-    temperature: float = 0.3,  # Lower temp for more consistent JSON
+    temperature: float = 0.2,  # Lower temp for consistent JSON output
 ) -> dict:
     """Call Ollama API with separate system and user prompts."""
     messages = [
@@ -68,10 +68,11 @@ async def _call_ollama_with_system(
         "model": settings.ollama_model_name,
         "messages": messages,
         "stream": False,
+        "format": "json",  # Request JSON format from Ollama
         "options": {
             "temperature": temperature,
             "top_p": 0.9,
-            "num_predict": 4096,  # Allow longer responses for full JSON
+            "num_predict": 8192,  # Increased for full workout JSON with all steps
         },
     }
 
@@ -530,6 +531,93 @@ async def download_workout_fit(
         media_type="application/octet-stream",
         headers={
             "Content-Disposition": f"attachment; filename=workout_{workout_id}.fit",
+        },
+    )
+
+
+@router.post("/plan/generate-fits")
+async def generate_weekly_plan_fits(
+    request: WeeklyPlanRequest,
+    user: User = Depends(get_current_user),
+):
+    """
+    Generate a weekly plan and return FIT files for all workouts.
+
+    Returns a ZIP file containing individual FIT files for each workout
+    in the generated plan. Each FIT file can be synced to Garmin/Concept2.
+
+    The AI uses the fitness-coach-lora model to generate complete workout
+    specifications with all steps needed for structured workouts.
+    """
+    import io
+    import zipfile
+
+    # Build context
+    context = await build_coaching_context(
+        user,
+        include_recent_activities=True,
+        include_upcoming_workouts=False,
+    )
+
+    # Build prompts using coach personality
+    system_prompt, user_prompt = build_weekly_plan_prompt(
+        context=context,
+        goals=request.goals,
+        user=user,
+        constraints=request.constraints,
+    )
+
+    # Call AI with structured prompts
+    data = await _call_ollama_with_system(system_prompt, user_prompt)
+    response_text = data["message"]["content"]
+
+    # Parse response
+    parsed, errors = parse_ai_response(response_text)
+
+    if parsed is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to generate plan: {'; '.join(errors) if errors else 'Invalid AI response'}",
+        )
+
+    # Check for workouts in the new format
+    workouts = []
+    if hasattr(parsed, 'workouts') and parsed.workouts:
+        workouts = [w.model_dump() if hasattr(w, 'model_dump') else w for w in parsed.workouts]
+    elif hasattr(parsed, 'new_workouts') and parsed.new_workouts:
+        # Fallback to old format
+        workouts = [w.model_dump() if hasattr(w, 'model_dump') else w for w in parsed.new_workouts]
+
+    if not workouts:
+        raise HTTPException(
+            status_code=400,
+            detail="AI generated no workouts. Try rephrasing your goals.",
+        )
+
+    # Generate FIT files for each workout
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for workout in workouts:
+            try:
+                fit_data = generate_fit_from_ai_workout(workout)
+                # Create safe filename
+                date = workout.get("date", "unknown")
+                name = workout.get("name", "workout")
+                safe_name = "".join(c if c.isalnum() or c in "._- " else "_" for c in name)[:30]
+                filename = f"{date}_{safe_name}.fit"
+                zip_file.writestr(filename, fit_data)
+            except Exception as e:
+                # Log error but continue with other workouts
+                print(f"Error generating FIT for {workout.get('name')}: {e}")
+                continue
+
+    zip_buffer.seek(0)
+
+    return Response(
+        content=zip_buffer.getvalue(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": "attachment; filename=weekly_plan.zip",
         },
     )
 

@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     # Ollama AI
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model_name: str = "llama3.2"
+    ollama_model_name: str = "fitness-coach-lora"
 
     # App
     app_host: str = "0.0.0.0"

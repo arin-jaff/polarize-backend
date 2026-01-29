@@ -90,6 +90,8 @@ def _map_target_type(target_type: Optional[str]) -> int:
         "pace": WKT_STEP_TARGET_SPEED,
         "speed": WKT_STEP_TARGET_SPEED,
         "cadence": WKT_STEP_TARGET_CADENCE,
+        "rate": WKT_STEP_TARGET_CADENCE,  # Rowing stroke rate maps to cadence
+        "stroke_rate": WKT_STEP_TARGET_CADENCE,  # Alias for rowing
         "open": WKT_STEP_TARGET_OPEN,
     }
     return mapping.get(target_type.lower(), WKT_STEP_TARGET_OPEN)
@@ -395,6 +397,76 @@ def generate_fit_from_plan(
             intensity=INTENSITY_ACTIVE,
             duration_type=WKT_STEP_DURATION_TIME,
             duration_value=duration_minutes * 60,
+            target_type=WKT_STEP_TARGET_OPEN,
+            target_low=None,
+            target_high=None,
+            notes=None,
+        )
+
+    return encoder.finalize()
+
+
+def generate_fit_from_ai_workout(workout_data: dict) -> bytes:
+    """
+    Generate a FIT file directly from AI coach workout JSON.
+
+    Handles the comprehensive workout format with full step definitions
+    as output by the fitness-coach-lora model.
+
+    Args:
+        workout_data: Dict containing workout with keys:
+            - name: Workout name
+            - sport: Sport type (default: rowing)
+            - date: YYYY-MM-DD format (optional)
+            - total_duration_seconds: Total duration (optional)
+            - steps: List of step dicts with step_type, duration_type,
+                    duration_value, target_type, target_low, target_high, notes
+
+    Returns:
+        Binary FIT file data
+    """
+    encoder = FITEncoder()
+    encoder._write_header()
+
+    sport = _sport_to_fit_sport(workout_data.get("sport", "rowing"))
+
+    # Parse date from workout if provided
+    timestamp = datetime.now(timezone.utc)
+    if workout_data.get("date"):
+        try:
+            timestamp = datetime.strptime(workout_data["date"], "%Y-%m-%d").replace(
+                hour=8, minute=0, second=0, tzinfo=timezone.utc
+            )
+        except ValueError:
+            pass
+
+    encoder._write_file_id(sport, timestamp)
+
+    steps = workout_data.get("steps", [])
+    workout_name = workout_data.get("name", "Rowing Workout")[:15]
+
+    encoder._write_workout(workout_name, sport, len(steps) or 1)
+
+    if steps:
+        for i, step in enumerate(steps):
+            encoder._write_workout_step(
+                step_index=i,
+                intensity=_map_step_type_to_intensity(step.get("step_type", "active")),
+                duration_type=_map_duration_type(step.get("duration_type", "time")),
+                duration_value=step.get("duration_value"),
+                target_type=_map_target_type(step.get("target_type")),
+                target_low=step.get("target_low"),
+                target_high=step.get("target_high"),
+                notes=step.get("notes"),
+            )
+    else:
+        # Fallback for workouts without steps
+        duration_seconds = workout_data.get("total_duration_seconds", 3600)
+        encoder._write_workout_step(
+            step_index=0,
+            intensity=INTENSITY_ACTIVE,
+            duration_type=WKT_STEP_DURATION_TIME,
+            duration_value=duration_seconds,
             target_type=WKT_STEP_TARGET_OPEN,
             target_low=None,
             target_high=None,

@@ -62,12 +62,26 @@ class NewWorkoutStep(BaseModel):
 class NewWorkout(BaseModel):
     date: str
     day: Optional[str] = None
+    day_of_week: Optional[str] = None  # Alias for day
     name: str
     sport: str
-    duration_minutes: float
+    duration_minutes: Optional[float] = None
+    total_duration_seconds: Optional[float] = None  # AI may return this instead
     estimated_tss: Optional[float] = None
+    zone: Optional[str] = None
+    interval_notation: Optional[str] = None
     description: Optional[str] = None
     steps: list[NewWorkoutStep] = Field(default_factory=list)
+
+    def get_duration_minutes(self) -> float:
+        """Get duration in minutes, converting from seconds if needed."""
+        if self.duration_minutes is not None:
+            return self.duration_minutes
+        if self.total_duration_seconds is not None:
+            return self.total_duration_seconds / 60
+        # Fallback: sum step durations
+        total_seconds = sum(s.duration_value or 0 for s in self.steps if s.duration_type == "time")
+        return total_seconds / 60 if total_seconds > 0 else 60
 
 
 class WeeklyLoadAdjustment(BaseModel):
@@ -219,7 +233,8 @@ def parse_ai_response(response_text: str) -> tuple[Optional[AICoachResponse], li
         if not valid:
             errors.append(err)
 
-        valid, err = validate_duration(workout.duration_minutes)
+        duration = workout.get_duration_minutes()
+        valid, err = validate_duration(duration)
         if not valid:
             errors.append(err)
 
@@ -360,7 +375,7 @@ async def _create_new_workout(
         name=workout_data.name,
         sport=workout_data.sport.lower(),
         description=workout_data.description,
-        estimated_duration=workout_data.duration_minutes * 60,
+        estimated_duration=workout_data.get_duration_minutes() * 60,
         estimated_tss=workout_data.estimated_tss,
         steps=steps,
     )
@@ -428,7 +443,7 @@ def generate_modification_preview(
             "date": workout.date,
             "name": workout.name,
             "sport": workout.sport,
-            "duration_minutes": workout.duration_minutes,
+            "duration_minutes": workout.get_duration_minutes(),
             "estimated_tss": workout.estimated_tss,
             "description": workout.description,
             "step_count": len(workout.steps),
